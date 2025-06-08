@@ -1,0 +1,176 @@
+# Commit 1: Data Preprocessing
+# Purpose: Clean, normalize, and split the diabetes dataset
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# Load the dataset
+def load_data():
+    data = pd.read_csv('diabetes.csv')
+    return data
+# Preprocess the data
+def preprocess_data(data):
+
+    # Handle missing values (replace 0s with NaN for specific columns where 0 is invalid)
+    columns_with_invalid_zeros = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+    data[columns_with_invalid_zeros] = data[columns_with_invalid_zeros].replace(0, np.nan)
+    # Impute missing values with median
+    for column in columns_with_invalid_zeros:
+        data[column].fillna(data[column].median(), inplace=True)
+
+    # Separate features and target
+    X = data.drop('Outcome', axis=1)
+    y = data['Outcome']
+
+    # Normalize the features
+    scaler = StandardScaler()
+    X_normalized = scaler.fit_transform(X)
+    # Convert back to DataFrame for consistency
+    X_normalized = pd.DataFrame(X_normalized, columns=X.columns)
+
+  # Split the data into training and testing sets (80-20 split)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_normalized, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    return X_train, X_test, y_train, y_test, scaler
+
+# Commit 2: Model Training and Diagnostic Tool
+# Purpose: Train a Random Forest model and create a diagnostic tool for diabetes prediction
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+import joblib
+
+# Load preprocessed data
+def load_preprocessed_data():
+    X_train = pd.read_csv('X_train.csv')
+    X_test = pd.read_csv('X_test.csv')
+    y_train = pd.read_csv('y_train.csv')
+    y_test = pd.read_csv('y_test.csv')
+    return X_train, X_test, y_train.values.ravel(), y_test.values.ravel()
+
+# Train Random Forest model
+def train_model(X_train, y_train):
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    return model
+
+# Predict and evaluate
+def evaluate_model(model, X_test, y_test):
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
+    return accuracy, report
+
+# Treatment and referral recommendations
+def get_recommendations(probability, features):
+    recommendations = {"treatment": [], "referral": ""}
+
+    # Treatment recommendations based on probability and feature values
+    if probability >= 0.7:
+        recommendations["treatment"].append("Initiate immediate lifestyle interventions (diet, exercise).")
+        recommendations["treatment"].append("Consider metformin therapy under medical supervision.")
+        recommendations["referral"] = "Refer to endocrinologist for comprehensive diabetes management."
+    elif 0.5 <= probability < 0.7:
+        recommendations["treatment"].append("Recommend lifestyle modifications (diet, exercise).")
+        recommendations["treatment"].append("Monitor blood glucose levels regularly.")
+        recommendations["referral"] = "Refer to general practitioner for ongoing monitoring."
+    else:
+        recommendations["treatment"].append("Encourage healthy lifestyle to prevent diabetes.")
+        recommendations["referral"] = "No immediate referral needed; continue routine check-ups."
+
+    # Additional recommendations based on specific features
+    if features['BMI'] > 30:
+        recommendations["treatment"].append("Consult nutritionist for weight management plan.")
+    if features['Glucose'] > 140:
+        recommendations["treatment"].append("Assess for insulin therapy if glucose remains elevated.")
+
+    return recommendations
+
+# Diagnostic tool function
+def diagnose_patient(model, scaler, patient_data):
+    # Ensure patient_data is a DataFrame with correct columns
+    columns = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin',
+               'BMI', 'DiabetesPedigreeFunction', 'Age']
+    patient_df = pd.DataFrame([patient_data], columns=columns)
+
+    # Handle missing values (replace 0s with median from training data)
+    columns_with_invalid_zeros = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+    patient_df[columns_with_invalid_zeros] = patient_df[columns_with_invalid_zeros].replace(0, np.nan)
+    for column in columns_with_invalid_zeros:
+ patient_df[column].fillna(patient_df[column].median(), inplace=True)
+
+    # Normalize patient data
+    patient_normalized = scaler.transform(patient_df)
+
+    # Predict
+    prediction = model.predict(patient_normalized)[0]
+    probability = model.predict_proba(patient_normalized)[0][1]
+
+    # Get recommendations
+    recommendations = get_recommendations(probability, patient_df.iloc[0])
+
+    return {
+        "diagnosis": "Diabetic" if prediction == 1 else "Non-Diabetic",
+        "probability": probability,
+        "recommendations": recommendations
+    }
+
+# Commit 3: Model Evaluation and Visualization
+# Purpose: Evaluate the model using accuracy, MAE, F1-score, and visualize results
+from sklearn.metrics import mean_absolute_error, f1_score, confusion_matrix, roc_curve, auc
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load preprocessed data and model
+def load_data_and_model():
+    X_train = pd.read_csv('X_train.csv')
+    X_test = pd.read_csv('X_test.csv')
+    y_train = pd.read_csv('y_train.csv').values.ravel()
+    y_test = pd.read_csv('y_test.csv').values.ravel()
+    model = joblib.load('diabetes_model.pkl')
+    return X_train, X_test, y_train, y_test, model
+
+# Evaluate model
+def evaluate_model_metrics(model, X_test, y_test):
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
+
+    # Calculate metrics
+    accuracy = accuracy_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+
+    # ROC curve
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    roc_auc = auc(fpr, tpr)
+
+    return accuracy, mae, f1, cm, fpr, tpr, roc_auc
+
+# Visualize results
+def visualize_results(cm, fpr, tpr, roc_auc):
+    # Plot confusion matrix
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+    plt.title('Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.savefig('confusion_matrix.png')
+    plt.close()
+
+    # Plot ROC curve
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc='lower right')
+    plt.savefig('roc_curve.png')
+    plt.close()
