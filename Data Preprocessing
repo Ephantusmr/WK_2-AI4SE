@@ -1,0 +1,39 @@
+# Commit 1: Data Preprocessing
+# Purpose: Clean, normalize, and split the diabetes dataset
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# Load the dataset
+def load_data():
+    data = pd.read_csv('diabetes.csv')
+    return data
+
+# Preprocess the data
+def preprocess_data(data):
+    # Handle missing values (replace 0s with NaN for specific columns where 0 is invalid)
+    columns_with_invalid_zeros = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+    data[columns_with_invalid_zeros] = data[columns_with_invalid_zeros].replace(0, np.nan)
+    
+    # Impute missing values with median
+    for column in columns_with_invalid_zeros:
+        data[column].fillna(data[column].median(), inplace=True)
+    
+    # Separate features and target
+    X = data.drop('Outcome', axis=1)
+    y = data['Outcome']
+    
+    # Normalize the features
+    scaler = StandardScaler()
+    X_normalized = scaler.fit_transform(X)
+    
+    # Convert back to DataFrame for consistency
+    X_normalized = pd.DataFrame(X_normalized, columns=X.columns)
+    
+    # Split the data into training and testing sets (80-20 split)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_normalized, y, test_size=0.2, random_state=42, stratify=y
+    )
+    
+    return X_train, X_test, y_train, y_test, scaler
